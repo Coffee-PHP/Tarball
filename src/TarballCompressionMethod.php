@@ -28,6 +28,7 @@ namespace CoffeePhp\Tarball;
 use CoffeePhp\CompressionMethod\AbstractCompressionMethod;
 use CoffeePhp\FileSystem\Contract\Data\Path\DirectoryInterface;
 use CoffeePhp\FileSystem\Contract\Data\Path\FileInterface;
+use CoffeePhp\FileSystem\Contract\Data\Path\PathNavigatorInterface;
 use CoffeePhp\Tarball\Contract\TarballCompressionMethodInterface;
 use CoffeePhp\Tarball\Exception\TarballCompressException;
 use CoffeePhp\Tarball\Exception\TarballUncompressException;
@@ -54,9 +55,7 @@ final class TarballCompressionMethod extends AbstractCompressionMethod implement
             }
             $fullPath = $this->getFullPath($absolutePath, self::EXTENSION);
             $pathNavigator = $this->getAvailablePath($fullPath);
-            $tar = new PharData((string)$pathNavigator);
-            $tar->buildFromDirectory($absolutePath);
-            return $this->fileManager->getFile($pathNavigator);
+            return $this->handleLowLevelCompression($uncompressedDirectory, $pathNavigator);
         } catch (TarballCompressException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -65,6 +64,31 @@ final class TarballCompressionMethod extends AbstractCompressionMethod implement
                 (int)$e->getCode(),
                 $e
             );
+        }
+    }
+
+    /**
+     * @param DirectoryInterface $directory
+     * @param PathNavigatorInterface $destination
+     * @return FileInterface
+     * @psalm-suppress UndefinedVariable
+     */
+    private function handleLowLevelCompression(
+        DirectoryInterface $directory,
+        PathNavigatorInterface $destination
+    ): FileInterface {
+        try {
+            $tar = new PharData((string)$destination);
+            $tar->buildFromDirectory((string)$directory);
+            unset($tar);
+            return $this->fileManager->getFile($destination);
+        } finally {
+            if (isset($tar)) { // @phpstan-ignore-line
+                unset($tar);
+                if ($destination->exists()) {
+                    $this->fileManager->getPath($destination)->delete();
+                }
+            }
         }
     }
 
@@ -86,9 +110,7 @@ final class TarballCompressionMethod extends AbstractCompressionMethod implement
             }
             $originalPath = $this->getOriginalPath($absolutePath, $extension);
             $pathNavigator = $this->getAvailablePath($originalPath);
-            $tar = new PharData($absolutePath);
-            $tar->extractTo((string)$pathNavigator);
-            return $this->fileManager->getDirectory($pathNavigator);
+            return $this->handleLowLevelUncompression($compressedDirectory, $pathNavigator);
         } catch (TarballUncompressException $e) {
             throw $e;
         } catch (Throwable $e) {
@@ -97,6 +119,31 @@ final class TarballCompressionMethod extends AbstractCompressionMethod implement
                 (int)$e->getCode(),
                 $e
             );
+        }
+    }
+
+    /**
+     * @param FileInterface $file
+     * @param PathNavigatorInterface $destination
+     * @return DirectoryInterface
+     * @psalm-suppress UndefinedVariable
+     */
+    private function handleLowLevelUncompression(
+        FileInterface $file,
+        PathNavigatorInterface $destination
+    ): DirectoryInterface {
+        try {
+            $tar = new PharData((string)$file);
+            $tar->extractTo((string)$destination);
+            unset($tar);
+            return $this->fileManager->getDirectory($destination);
+        } finally {
+            if (isset($tar)) { // @phpstan-ignore-line
+                unset($tar);
+                if ($destination->exists()) {
+                    $this->fileManager->getPath($destination)->delete();
+                }
+            }
         }
     }
 }
