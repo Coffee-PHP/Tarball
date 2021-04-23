@@ -26,14 +26,17 @@ declare(strict_types=1);
 namespace CoffeePhp\Tarball;
 
 use CoffeePhp\CompressionMethod\AbstractCompressionMethod;
-use CoffeePhp\FileSystem\Contract\Data\Path\DirectoryInterface;
-use CoffeePhp\FileSystem\Contract\Data\Path\FileInterface;
-use CoffeePhp\FileSystem\Contract\Data\Path\PathNavigatorInterface;
 use CoffeePhp\Tarball\Contract\TarballCompressionMethodInterface;
 use CoffeePhp\Tarball\Exception\TarballCompressException;
 use CoffeePhp\Tarball\Exception\TarballUncompressException;
 use PharData;
 use Throwable;
+
+use function is_dir;
+use function is_file;
+use function pathinfo;
+
+use const DIRECTORY_SEPARATOR;
 
 /**
  * Class TarballCompressionMethod
@@ -43,107 +46,44 @@ use Throwable;
  */
 final class TarballCompressionMethod extends AbstractCompressionMethod implements TarballCompressionMethodInterface
 {
+
     /**
      * @inheritDoc
      */
-    public function compressDirectory(DirectoryInterface $uncompressedDirectory): FileInterface
+    public function compressDirectory(string $uncompressedDirectoryPath): string
     {
-        try {
-            $absolutePath = (string)$uncompressedDirectory;
-            if (!$uncompressedDirectory->exists()) {
-                throw new TarballCompressException("The given directory does not exist: {$absolutePath}");
-            }
-            $fullPath = $this->getFullPath($absolutePath, self::EXTENSION);
-            $pathNavigator = $this->getAvailablePath($fullPath);
-            return $this->handleLowLevelCompression($uncompressedDirectory, $pathNavigator);
-        } catch (TarballCompressException $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw new TarballCompressException(
-                "Unexpected Compression Exception: {$e->getMessage()}",
-                (int)$e->getCode(),
-                $e
-            );
+        if (!is_dir($uncompressedDirectoryPath)) {
+            throw new TarballCompressException('The given directory is invalid or does not exist');
         }
-    }
-
-    /**
-     * @param DirectoryInterface $directory
-     * @param PathNavigatorInterface $destination
-     * @return FileInterface
-     * @psalm-suppress UndefinedVariable
-     */
-    private function handleLowLevelCompression(
-        DirectoryInterface $directory,
-        PathNavigatorInterface $destination
-    ): FileInterface {
+        $destination = $this->getAvailablePath($uncompressedDirectoryPath . '.' . self::EXTENSION);
         try {
-            $tar = new PharData((string)$destination);
-            $tar->buildFromDirectory((string)$directory);
-            unset($tar);
-            return $this->fileManager->getFile($destination);
-        } finally {
-            if (isset($tar)) { // @phpstan-ignore-line
-                unset($tar);
-                if ($destination->exists()) {
-                    $this->fileManager->getPath($destination)->delete();
-                }
-            }
+            $tar = new PharData($destination);
+            $tar->buildFromDirectory($uncompressedDirectoryPath);
+            return $destination;
+        } catch (Throwable $e) {
+            throw new TarballCompressException($e->getMessage(), (int)$e->getCode(), $e);
         }
     }
 
     /**
      * @inheritDoc
      */
-    public function uncompressDirectory(FileInterface $compressedDirectory): DirectoryInterface
+    public function uncompressDirectory(string $compressedDirectoryFilePath): string
     {
-        try {
-            $absolutePath = (string)$compressedDirectory;
-            if (!$compressedDirectory->exists()) {
-                throw new TarballUncompressException("The given archive does not exist: {$absolutePath}");
-            }
-            $extension = self::EXTENSION;
-            if (!$this->isFullPath($absolutePath, $extension)) {
-                throw new TarballUncompressException(
-                    "Directory archive '{$absolutePath}' does not have the extension: {$extension}"
-                );
-            }
-            $originalPath = $this->getOriginalPath($absolutePath, $extension);
-            $pathNavigator = $this->getAvailablePath($originalPath);
-            return $this->handleLowLevelUncompression($compressedDirectory, $pathNavigator);
-        } catch (TarballUncompressException $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            throw new TarballUncompressException(
-                "Unexpected Uncompression Exception: {$e->getMessage()}",
-                (int)$e->getCode(),
-                $e
-            );
+        if (!is_file($compressedDirectoryFilePath)) {
+            throw new TarballUncompressException('The given archive file is invalid or does not exist');
         }
-    }
-
-    /**
-     * @param FileInterface $file
-     * @param PathNavigatorInterface $destination
-     * @return DirectoryInterface
-     * @psalm-suppress UndefinedVariable
-     */
-    private function handleLowLevelUncompression(
-        FileInterface $file,
-        PathNavigatorInterface $destination
-    ): DirectoryInterface {
+        $pathInfo = pathinfo($compressedDirectoryFilePath);
+        if (($pathInfo['extension'] ?? '') !== self::EXTENSION) {
+            throw new TarballUncompressException('The given file is not a tarball archive');
+        }
+        $destination = $this->getAvailablePath($pathInfo['dirname'] . DIRECTORY_SEPARATOR . $pathInfo['filename']);
         try {
-            $tar = new PharData((string)$file);
-            $tar->extractTo((string)$destination);
-            unset($tar);
-            return $this->fileManager->getDirectory($destination);
-        } finally {
-            if (isset($tar)) { // @phpstan-ignore-line
-                unset($tar);
-                if ($destination->exists()) {
-                    $this->fileManager->getPath($destination)->delete();
-                }
-            }
+            $tar = new PharData($compressedDirectoryFilePath);
+            $tar->extractTo($destination);
+            return $destination;
+        } catch (Throwable $e) {
+            throw new TarballUncompressException($e->getMessage(), (int)$e->getCode(), $e);
         }
     }
 }

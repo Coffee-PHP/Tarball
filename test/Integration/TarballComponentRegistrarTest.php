@@ -25,9 +25,8 @@ declare(strict_types=1);
 
 namespace CoffeePhp\Tarball\Test\Integration;
 
+use CoffeePhp\ComponentRegistry\ComponentRegistry;
 use CoffeePhp\Di\Container;
-use CoffeePhp\FileSystem\Enum\PathConflictStrategy;
-use CoffeePhp\FileSystem\Integration\FileSystemComponentRegistrar;
 use CoffeePhp\Tarball\Contract\TarballCompressionMethodInterface;
 use CoffeePhp\Tarball\Integration\TarballComponentRegistrar;
 use CoffeePhp\Tarball\TarballCompressionMethod;
@@ -36,8 +35,6 @@ use PHPUnit\Framework\TestCase;
 use function PHPUnit\Framework\assertInstanceOf;
 use function PHPUnit\Framework\assertSame;
 use function PHPUnit\Framework\assertTrue;
-use function print_r;
-use function str_contains;
 
 /**
  * Class TarballComponentRegistrarTest
@@ -54,10 +51,8 @@ final class TarballComponentRegistrarTest extends TestCase
     public function testRegister(): void
     {
         $di = new Container();
-        $fileSystemRegistrar = new FileSystemComponentRegistrar();
-        $fileSystemRegistrar->register($di);
-        $registrar = new TarballComponentRegistrar();
-        $registrar->register($di);
+        $componentRegistry = new ComponentRegistry($di);
+        $componentRegistry->register(TarballComponentRegistrar::class);
 
         assertTrue(
             $di->has(TarballCompressionMethodInterface::class)
@@ -72,32 +67,6 @@ final class TarballComponentRegistrarTest extends TestCase
         assertSame(
             $di->get(TarballCompressionMethod::class),
             $di->get(TarballCompressionMethodInterface::class)
-        );
-
-        assertTrue(
-            str_contains(
-                print_r(
-                    $di->get(TarballCompressionMethod::class),
-                    true
-                ),
-                'WORKAROUND'
-            )
-        );
-
-        $di->bind(
-            TarballCompressionMethod::class,
-            TarballCompressionMethod::class,
-            ['pathConflictStrategy' => PathConflictStrategy::REPLACE()]
-        );
-
-        assertTrue(
-            str_contains(
-                print_r(
-                    $di->get(TarballCompressionMethod::class),
-                    true
-                ),
-                'REPLACE'
-            )
         );
     }
 }

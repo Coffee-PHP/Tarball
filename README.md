@@ -1,6 +1,6 @@
 # Coffee PHP - Tarball
 
-Provides classes for handling tarball compression.
+![Build](https://github.com/Coffee-PHP/Tarball/workflows/Build/badge.svg)
 
 ```
 Copyright 2020 Danny Damsky

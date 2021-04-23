@@ -38,13 +38,19 @@ use CoffeePhp\Tarball\TarballCompressionMethod;
  */
 final class TarballComponentRegistrar implements ComponentRegistrarInterface
 {
+    /**
+     * TarballComponentRegistrar constructor.
+     */
+    public function __construct(private ContainerInterface $di)
+    {
+    }
 
     /**
      * @inheritDoc
      */
-    public function register(ContainerInterface $di): void
+    public function register(): void
     {
-        $di->bind(TarballCompressionMethodInterface::class, TarballCompressionMethod::class);
-        $di->bind(TarballCompressionMethod::class, TarballCompressionMethod::class);
+        $this->di->bind(TarballCompressionMethodInterface::class, TarballCompressionMethod::class);
+        $this->di->bind(TarballCompressionMethod::class, TarballCompressionMethod::class);
     }
 }

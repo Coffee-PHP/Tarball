@@ -19,20 +19,21 @@
  * @package coffeephp\tarball
  * @author Danny Damsky <dannydamsky99@gmail.com>
  * @since 2020-09-10
+ * @noinspection StaticInvocationViaThisInspection
  */
 
 declare(strict_types=1);
 
 namespace CoffeePhp\Tarball\Test\Unit;
 
-use CoffeePhp\FileSystem\Data\Path\PathNavigator;
-use CoffeePhp\FileSystem\FileManager;
+use CoffeePhp\QualityTools\TestCase;
 use CoffeePhp\Tarball\TarballCompressionMethod;
-use PHPUnit\Framework\TestCase;
 
-use function PHPUnit\Framework\assertFalse;
-use function PHPUnit\Framework\assertSame;
-use function PHPUnit\Framework\assertTrue;
+use function file_get_contents;
+use function implode;
+use function mkdir;
+
+use const PHP_EOL;
 
 /**
  * Class TarballCompressionMethodTest
@@ -46,35 +47,38 @@ final class TarballCompressionMethodTest extends TestCase
     /**
      * @see TarballCompressionMethod::compressDirectory()
      * @see TarballCompressionMethod::uncompressDirectory()
-     * @noinspection PhpUndefinedMethodInspection
      */
     public function testPathCompressionMethod(): void
     {
-        $fileManager = new FileManager();
-        $method = new TarballCompressionMethod($fileManager);
+        $method = new TarballCompressionMethod();
 
-        $dir = (new PathNavigator(__DIR__))->abc();
-        $file = (clone $dir)->def()->ghi()->jkl()->mno()->pqr()->stu()->vwx()->yz()->down('file.txt');
-        $fileModel = $fileManager->createFile($file);
-        $fileModel->write('abc');
-        $dirModel = $fileManager->getDirectory($dir);
+        $dir = __DIR__ . DIRECTORY_SEPARATOR . 'temp';
+        $this->assertTrue(mkdir($dir));
+        $file = $dir . DIRECTORY_SEPARATOR . 'file.txt';
+        $contents = implode(PHP_EOL, $this->getFaker()->paragraphs(50));
+        $this->assertNotFalse(file_put_contents($file, $contents));
 
-        $tarFile = $method->compressDirectory($dirModel);
+        $tarFile = $method->compressDirectory($dir);
 
-        assertSame(
-            "{$dir}.tar",
-            (string)$tarFile
-        );
+        $this->assertSame("$dir.tar", $tarFile);
 
-        $dirModel->delete();
+        $this->assertTrue(unlink($file));
+        $this->assertTrue(rmdir($dir));
+        $this->assertFileDoesNotExist($file);
+        $this->assertDirectoryDoesNotExist($dir);
 
-        assertFalse($dirModel->exists() || $fileModel->exists());
+        $dir2 = $method->uncompressDirectory($tarFile);
+        $this->assertSame($dir, $dir2);
 
-        $method->uncompressDirectory($tarFile);
+        $this->assertDirectoryExists($dir);
+        $this->assertFileExists($file);
+        $this->assertSame($contents, file_get_contents($file));
 
-        assertTrue($dirModel->exists() && $fileModel->exists() && $fileModel->read() === 'abc');
-
-        $tarFile->delete();
-        $dirModel->delete();
+        $this->assertTrue(unlink($file));
+        $this->assertTrue(rmdir($dir));
+        $this->assertTrue(unlink($tarFile));
+        $this->assertFileDoesNotExist($file);
+        $this->assertDirectoryDoesNotExist($dir);
+        $this->assertFileDoesNotExist($tarFile);
     }
 }
